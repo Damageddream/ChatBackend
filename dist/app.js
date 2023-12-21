@@ -6,28 +6,48 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const cors_1 = __importDefault(require("cors"));
-const http_1 = __importDefault(require("http"));
-const socket_io_1 = require("socket.io");
+const WebSocket = require("ws");
 dotenv_1.default.config();
+function onSocketPreError(e) {
+    console.log(e);
+}
+function onSocketPostError(e) {
+    console.log(e);
+}
 const app = (0, express_1.default)();
-const server = http_1.default.createServer(app);
-const port = process.env.PORT;
-app.use((0, cors_1.default)());
-const io = new socket_io_1.Server(server, {
-    cors: {
-        origin: 'http://localhost:3000'
-    }
+const port = 8000;
+const wss = new WebSocket.Server({ noServer: true });
+wss.on("connection", (socket) => {
+    socket.on("message", (message) => console.log(message));
 });
-io.on('connection', (socket) => {
-    console.log(`⚡: ${socket.id} user just connected!`);
-    socket.on('disconnect', () => {
-        console.log('🔥: A user disconnected');
+app.use((0, cors_1.default)());
+app.get("/", (req, res) => {
+    res.send("Express + TypeScript Server");
+});
+const server = app.listen(port, () => {
+    console.log(`⚡️[server]: Server is running at http://localhost:${port}`);
+});
+server.on("upgrade", (req, socket, head) => {
+    socket.on("error", onSocketPreError);
+    //preform auth
+    if (!!req.headers["BadAuth"]) {
+        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+        socket.destroy();
+        return;
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => {
+        socket.removeListener("error", onSocketPreError);
+        wss.emit("connection", ws, req);
     });
 });
-app.get('/', (req, res) => {
-    res.send('Express + TypeScript Server');
-});
-app.listen(port, () => {
-    console.log(`⚡️[server]: Server is running at http://localhost:${port}`);
+wss.on("connection", (ws, req) => {
+    ws.on("error", onSocketPostError);
+    ws.on("message", (msg, isBinary) => {
+        wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(msg, { binary: isBinary });
+            }
+        });
+    });
 });
 //# sourceMappingURL=app.js.map
