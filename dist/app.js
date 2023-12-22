@@ -1,53 +1,42 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
+// import express, { Express, Request, Response } from "express";
+// import dotenv from "dotenv";
+// import cors from "cors";
+// import WebSocket = require("ws");
 Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = __importDefault(require("express"));
-const dotenv_1 = __importDefault(require("dotenv"));
-const cors_1 = __importDefault(require("cors"));
-const WebSocket = require("ws");
-dotenv_1.default.config();
-function onSocketPreError(e) {
-    console.log(e);
-}
+// dotenv.config();
+// function onSocketPreError(e: Error) {
+//   console.log(e);
+// }
 function onSocketPostError(e) {
     console.log(e);
 }
-const app = (0, express_1.default)();
+const { WebSocketServer } = require('ws');
+const http = require('http');
+// Spinning the HTTP server and the WebSocket server.
+const server = http.createServer();
+const wsServer = new WebSocketServer({ server });
 const port = 8000;
-const wss = new WebSocket.Server({ noServer: true });
-wss.on("connection", (socket) => {
-    socket.on("message", (message) => console.log(message));
+server.listen(port, () => {
+    console.log(`WebSocket server is running on port ${port}`);
 });
-app.use((0, cors_1.default)());
-app.get("/", (req, res) => {
-    res.send("Express + TypeScript Server");
-});
-const server = app.listen(port, () => {
-    console.log(`⚡️[server]: Server is running at http://localhost:${port}`);
-});
-server.on("upgrade", (req, socket, head) => {
-    socket.on("error", onSocketPreError);
-    //preform auth
-    if (!!req.headers["BadAuth"]) {
-        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-        socket.destroy();
-        return;
-    }
-    wss.handleUpgrade(req, socket, head, (ws) => {
-        socket.removeListener("error", onSocketPreError);
-        wss.emit("connection", ws, req);
+// I'm maintaining all active connections in this object
+const clients = {};
+// A new client connection request received
+wsServer.on('connection', function (connection) {
+    connection.on("error", onSocketPostError);
+    // Generate a unique code for every user
+    const userId = 1;
+    console.log(`Recieved a new connection.`);
+    // Store the new connection and handle messages
+    clients[userId] = connection;
+    console.log(`${userId} connected.`);
+    connection.on('message', function incoming(message) {
+        console.log('received: %s', message);
     });
-});
-wss.on("connection", (ws, req) => {
-    ws.on("error", onSocketPostError);
-    ws.on("message", (msg, isBinary) => {
-        wss.clients.forEach((client) => {
-            if (client.readyState === WebSocket.OPEN) {
-                client.send(msg, { binary: isBinary });
-            }
-        });
+    connection.on('close', function close() {
+        console.log(`${userId} disconnected.`);
+        delete clients[userId];
     });
 });
 //# sourceMappingURL=app.js.map
